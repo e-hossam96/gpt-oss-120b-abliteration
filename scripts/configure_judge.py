@@ -1,10 +1,4 @@
-"""Ask for the LLM judge (name, base URL, API key) and store it in a gitignored env file.
-
-The judge is any OpenAI-compatible /chat/completions endpoint. abliterix reads the
-model and base URL from CLI flags and the key from LLM_JUDGE_API_KEY (its default
-env var when a base URL is set); evaluate.py reads all three from the environment.
-Load the file before running anything with `set -a; . ./.env.judge; set +a`.
-"""
+"""Ask for the LLM judge's name, base URL and API key and save them to .env.judge."""
 
 from __future__ import annotations
 
@@ -27,7 +21,6 @@ JUDGE_VARS = (MODEL_VAR, BASE_URL_VAR, API_KEY_VAR)
 
 
 def base_url_problem(url: str) -> str | None:
-    """Why `url` is not a usable OpenAI-compatible base URL, or None if it is."""
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         return f"{BASE_URL_VAR} must be an http(s) URL such as https://host/v1"

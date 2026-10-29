@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# GPU pod only (Linux): the configs use backend = "vllm".
+# GPU machine only (Linux).
 pod = [
     "abliterix[vllm]==1.12.2",
 ]
@@ -30,7 +30,7 @@ package = false
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-# Byte-identical upstream copies; see docs/UPSTREAM.md.
+# Unmodified upstream copies.
 extend-exclude = ["scripts/upstream"]
 
 [tool.ruff.lint]

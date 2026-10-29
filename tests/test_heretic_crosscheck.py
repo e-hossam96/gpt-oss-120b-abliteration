@@ -3,7 +3,6 @@ import json
 import heretic_crosscheck as hc
 import pytest
 
-# Synthetic log in the Heretic 1.4.0 line format. No real model output.
 SYNTHETIC_LOG = """\
 \x1b[36m█░█░█▀▀░█▀▄░█▀▀░▀█▀░█░█▀▀\x1b[0m  v1.4.0
 █▀█░█▀▀░█▀▄░█▀▀░░█░░█░█░░  https://heretic-project.org

@@ -1,9 +1,4 @@
-"""Sanity-check configs/stage1.toml and configs/stage2.toml before a GPU run.
-
-Errors exit non-zero. Conditions that only hold on the GPU pod (datasets downloaded,
-model directories present, LLM judge variables set) are warnings locally and errors
-with --pod.
-"""
+"""Check the stage configs before a GPU run. Pod-only checks are warnings unless --pod."""
 
 from __future__ import annotations
 
@@ -22,14 +17,11 @@ from configure_judge import judge_env_problems
 from layout import BASE_BF16_DIR, REPO_ROOT, STAGE1_EXPORT_DIR, STAGES
 from pydantic import BaseModel
 
-# gpt-oss-120b config.json (HF commit b5c939de): 64 attention heads, 8 KV heads.
 NUM_ATTENTION_HEADS = 64
 NUM_KV_HEADS = 8
 ALLOWED_TP = (1, 2, 4, 8)
-# Upstream v7 comments: o_proj + EGA + router search is "~9 dims"; v5 ran 40/9 = 4.4.
 DEFAULT_SEARCH_DIMS = 9
 DEFAULT_MIN_WARMUP_PER_DIM = 4.4
-# Keys we deliberately add that are absent from the upstream v7 files.
 ALLOWED_ADDED_KEYS = frozenset({"optimization.sampler_seed"})
 PROMPT_SECTIONS = ("benign_prompts", "target_prompts", "benign_eval_prompts", "target_eval_prompts")
 EXPECTED_MODEL_ID = {"stage1": BASE_BF16_DIR, "stage2": STAGE1_EXPORT_DIR}
@@ -53,7 +45,7 @@ def load_toml(path: Path) -> dict[str, Any]:
 
 
 def flatten_keys(table: dict[str, Any], prefix: str = "") -> Iterator[str]:
-    """Yield dotted keys. model.max_memory is one leaf: its GPU keys follow the TP size."""
+    # max_memory's keys depend on the GPU count, so treat it as a single key.
     for key, value in table.items():
         dotted = f"{prefix}{key}"
         if isinstance(value, dict) and dotted != "model.max_memory":
@@ -117,7 +109,6 @@ def check_key_subset(stage: str, cfg: dict[str, Any], upstream: dict[str, Any], 
 
 
 def _model_class(annotation: Any) -> type[BaseModel] | None:
-    """Return the pydantic model class inside an annotation such as `Foo | None`."""
     if isinstance(annotation, type) and issubclass(annotation, BaseModel):
         return annotation
     if typing.get_origin(annotation) in (typing.Union, types.UnionType):
@@ -128,7 +119,7 @@ def _model_class(annotation: Any) -> type[BaseModel] | None:
 
 
 def unknown_schema_keys(table: dict[str, Any], model: type[BaseModel], prefix: str = ""):
-    """Yield keys abliterix does not define. Its nested sections silently ignore them."""
+    # abliterix silently ignores unknown keys inside sections, so find them here.
     for key, value in table.items():
         info = model.model_fields.get(key)
         if info is None:
@@ -140,11 +131,7 @@ def unknown_schema_keys(table: dict[str, Any], model: type[BaseModel], prefix: s
 
 
 def abliterix_config(cfg: dict[str, Any]) -> Any:
-    """Build an AbliterixConfig from `cfg` alone, running all abliterix validators.
-
-    AbliterixConfig is a pydantic BaseSettings that also reads sys.argv (CLI) and
-    AX_* env vars, even through model_validate; only init kwargs are kept here.
-    """
+    # Validate `cfg` only, ignoring command-line arguments and AX_* environment variables.
     from abliterix.settings import AbliterixConfig
 
     class FileOnlyConfig(AbliterixConfig):

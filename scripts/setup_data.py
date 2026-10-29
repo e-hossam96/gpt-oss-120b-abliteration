@@ -1,10 +1,4 @@
-"""Download wangzhang/abliterix-datasets and materialize data/<subset>/<file>.json.
-
-abliterix loads a local directory without a dataset_info.json through
-`datasets.load_dataset(<dir>, split=...)`, i.e. the json builder with split "train",
-which is what the configs' `train[:400]` / `train[400:]` slices expect.
-Prints row counts and overlap flags only, never prompt text.
-"""
+"""Download the prompt datasets into data/<subset>/ and print row counts and overlaps."""
 
 from __future__ import annotations
 
@@ -19,7 +13,7 @@ from layout import DATA_DIR
 from prompt_data import SUBSETS, is_superset, load_prompts, read_records
 
 DATASET_REPO = "wangzhang/abliterix-datasets"
-# SHA256 pins from upstream benchmarks/SPEC.md at 1940c8c14688772011d5f20b03c5dffb042a3e8f.
+# From upstream benchmarks/SPEC.md.
 PINNED_SHA256 = {
     "harmful_500/harmful_prompts_500.json": (
         "249e48f403a8a015a808384ef567c7fa6462aaf7c51d4a78c2caeb0509bd769d"
@@ -42,7 +36,6 @@ def download(revision: str | None) -> tuple[Path, str]:
     from huggingface_hub import HfApi, snapshot_download
 
     commit = HfApi().dataset_info(DATASET_REPO, revision=revision).sha
-    # TODO(verify): repo layout is assumed to mirror upstream's local datasets/<subset>/*.json.
     snapshot = snapshot_download(
         repo_id=DATASET_REPO,
         repo_type="dataset",
@@ -53,7 +46,6 @@ def download(revision: str | None) -> tuple[Path, str]:
 
 
 def materialize(snapshot: Path, data_dir: Path) -> dict[str, dict]:
-    """Copy one JSON file per subset into data_dir, verifying schema and SHA256 pins."""
     manifest = {}
     for subset in SUBSETS:
         sources = sorted((snapshot / subset).glob("*.json*"))

@@ -1,5 +1,3 @@
-"""Read the materialized prompt files and compute held-out sets. Never prints prompt text."""
-
 from __future__ import annotations
 
 import json
@@ -9,7 +7,7 @@ SUBSETS = ("good_500", "harmful_500", "good_1000", "harmful_1000")
 
 
 def read_records(path: Path) -> list[dict]:
-    """Parse a JSON array or JSON Lines file of objects that each carry a string `prompt`."""
+    # Accepts a JSON array or JSON Lines.
     text = path.read_text(encoding="utf-8")
     try:
         records = json.loads(text)
@@ -38,12 +36,11 @@ def load_prompts(data_dir: Path, subset: str) -> list[str]:
 
 
 def normalize(text: str) -> str:
-    """Case- and whitespace-insensitive key, so trivial variants still count as overlap."""
     return " ".join(text.casefold().split())
 
 
 def held_out(full: list[str], used: list[str]) -> list[str]:
-    """Prompts of `full` that do not appear (after normalization) in `used`, deduplicated."""
+    # Prompts in `full` but not in `used`, ignoring case and whitespace, without duplicates.
     seen = {normalize(p) for p in used}
     result = []
     for prompt in full:
@@ -55,5 +52,4 @@ def held_out(full: list[str], used: list[str]) -> list[str]:
 
 
 def is_superset(full: list[str], subset: list[str]) -> bool:
-    """Exact-text containment of every subset prompt in the full set."""
     return set(subset) <= set(full)

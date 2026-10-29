@@ -5,7 +5,6 @@ import pytest
 
 
 def write_subset(data_dir: Path, subset: str, prompts: list[str]) -> Path:
-    """Synthetic placeholder prompts in the upstream file layout (no real prompt text)."""
     target = data_dir / subset
     target.mkdir(parents=True, exist_ok=True)
     path = target / f"{subset}.json"
@@ -19,7 +18,7 @@ def synthetic_data(tmp_path: Path) -> Path:
     data = tmp_path / "data"
     small = [f"placeholder question {i}" for i in range(5)]
     write_subset(data, "harmful_500", small)
-    # Superset with whitespace/case variants of two subset rows, plus 3 new rows.
+    # Contains all of `small`, case/whitespace variants of two rows, and 3 new rows.
     write_subset(
         data,
         "harmful_1000",

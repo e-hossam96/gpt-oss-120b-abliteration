@@ -1,33 +1,33 @@
-# gpt-oss-120b two-stage abliteration (abliterix)
+# gpt-oss-120b two-stage abliteration
 
-A limited-trial, two-stage abliteration of `openai/gpt-oss-120b` using
-[abliterix](https://github.com/wuwangzhang1216/abliterix) **1.12.2** through its own CLI.
-This repo contains no abliteration code. It holds:
+Removes refusals from `openai/gpt-oss-120b` in two passes, using the
+[abliterix](https://github.com/wuwangzhang1216/abliterix) **1.12.2** command-line tool
+with a reduced trial budget. This repo contains no abliteration code of its own, only
+configs and helper scripts:
 
-- `configs/stage1.toml`, `configs/stage2.toml`: upstream `gpt_oss_120b_v7s1/v7s2.toml` with
-  run-specific edits ([docs/DEVIATIONS.md](docs/DEVIATIONS.md)). Unmodified originals are in
-  `configs/upstream/`.
-- `scripts/setup_data.py`: downloads the prompt datasets into gitignored `data/`.
-- `scripts/configure_judge.py`: asks for the LLM judge (name, base URL, API key).
-- `scripts/check_configs.py`: config sanity checks, including validation by abliterix itself.
-- `scripts/best_trial.py`: picks the trial to export, using abliterix's own selection rule.
-- `scripts/upstream/`: upstream's BF16-prep and export scripts, byte-identical.
-- `scripts/evaluate.py`: held-out refusal evaluation with an LLM judge.
-- `scripts/heretic_crosscheck.py`: optional independent check with Heretic.
+| Path | Purpose |
+| --- | --- |
+| `configs/stage1.toml`, `configs/stage2.toml` | Upstream's v7 configs with a few changes ([docs/DEVIATIONS.md](docs/DEVIATIONS.md)). Originals are in `configs/upstream/`. |
+| `scripts/setup_data.py` | Downloads the prompt datasets into `data/`. |
+| `scripts/configure_judge.py` | Asks for the LLM judge (name, base URL, API key). |
+| `scripts/check_configs.py` | Checks the configs, including with abliterix's own validation. |
+| `scripts/best_trial.py` | Picks the trial to export. |
+| `scripts/upstream/` | Upstream's BF16 conversion and export scripts, unmodified. |
+| `scripts/evaluate.py` | Measures refusals on prompts the search never saw. |
+| `scripts/heretic_crosscheck.py` | Optional second opinion from Heretic. |
 
-Recon findings: [docs/RECON.md](docs/RECON.md). Pinned sources: [docs/UPSTREAM.md](docs/UPSTREAM.md).
+More detail: [docs/RECON.md](docs/RECON.md) (findings) and
+[docs/UPSTREAM.md](docs/UPSTREAM.md) (pinned sources).
 
-> **Read before running.** The unmodified upstream v7 configs do not load in abliterix
-> 1.12.2 (or master). `weight_normalization = "full"` is rejected for the vLLM backend,
-> so both stage configs use `"pre"`. This changes the edit, and upstream's published v7
-> results are not directly comparable. abliterix's `--non-interactive-output-dir`
-> export is not used either, because it cannot work with the vLLM in-place backend.
-> Winners are exported with upstream's own `export_model.py`. Details are in
-> DEVIATIONS.md.
+> **Read before running.** Upstream's v7 configs do not load in abliterix 1.12.2:
+> `weight_normalization = "full"` is rejected with the vLLM backend, so both configs use
+> `"pre"`. Results are therefore not directly comparable with upstream's. abliterix's
+> built-in export (`--non-interactive-output-dir`) does not work with the vLLM backend,
+> so models are exported with upstream's `export_model.py` instead.
 
-## Quickstart (authoring PC, CPU only)
+## Local checks (CPU only)
 
-```
+```bash
 uv sync
 uv run ruff check
 uv run pytest -q
@@ -35,203 +35,173 @@ uv run python scripts/check_configs.py
 uv run python scripts/heretic_crosscheck.py --dry-run
 ```
 
-Locally, `check_configs.py` reports pod-only conditions as warnings: data not
-downloaded, model directories missing, LLM judge variables unset. Stage 2's
-2.2 warm-up trials per search dimension is also a warning. Use `--pod` on the GPU pod
-to make the pod-only checks errors.
+Locally, `check_configs.py` only warns about things that exist on the GPU machine
+("pod"): downloaded data, model directories and judge variables. Pass `--pod` there to
+turn those warnings into errors. Stage 2's low warm-up count (2.2 trials per search
+dimension) is always a warning.
 
 ## Hardware
 
-GPUs: 4× 96 GB (e.g. RTX PRO 6000), as in upstream's v7 configs:
-`tensor_parallel_size = 4` and `max_memory = {0 = "92GiB", 1 = "92GiB", 2 = "92GiB", 3 = "92GiB"}`.
-`check_configs.py` checks that TP divides 64 attention heads and 8 KV heads (3 is
-rejected) and that `max_memory` has one entry per GPU.
+- **GPUs:** 4× 96 GB (e.g. RTX PRO 6000), as upstream. The configs use
+  `tensor_parallel_size = 4` and `max_memory` of 92 GiB per GPU. `check_configs.py`
+  checks that the GPU count divides the model's 64 attention heads and 8 KV heads
+  (so 3 is rejected) and that `max_memory` has one entry per GPU.
+- **Disk:** at least 1 TB. Each BF16 checkpoint is about 232 GB (base, Stage 1, Stage 2),
+  plus about 65 GB for the original download.
+- **RAM:** 256 GB or more. vLLM keeps about 20–25 GB of CPU backups per GPU.
 
-Disk: each BF16 checkpoint is about 232 GB (upstream estimate): base BF16, Stage 1
-export and Stage 2 export, plus about 65 GB of MXFP4 originals in the HF cache. Plan
-for at least 1 TB. Host RAM: the vLLM in-place editor keeps pinned CPU backups of
-roughly 20–25 GB per TP worker (upstream docstring estimate); 256 GB or more is advisable.
+## Time (upstream's estimates, not measured)
 
-## Time estimate (upstream's numbers, not measured here)
+About 60 s per trial: Stage 1 (100 trials) takes about 1.7 h and Stage 2 (50 trials)
+about 50 min. BF16 conversion takes 8–15 min. Each export reloads the model and writes
+about 232 GB; upstream gives no time for it.
 
-Upstream estimates ~60 s per trial on 4× RTX PRO 6000 at TP=4, so Stage 1 (100 trials)
-takes about 1.7 h and Stage 2 (50 trials) about 50 min. BF16 prep takes ~8–15 min.
-Each `export_model.py` run reloads the model in HF, re-extracts hidden states and writes
-~232 GB, with no upstream estimate.
-
-## Pod commands (Linux, run from the repo root)
+## Running on the GPU machine (Linux, from the repo root)
 
 ```bash
-# 0. Environment. The pod extra adds vLLM. Secrets go in the environment, never in git.
+# 0. Install. Keep secrets in the environment, never in git.
 uv sync --frozen --extra pod
-export HF_TOKEN=...            # read-only; needs access to wangzhang/abliterix-datasets (see Unverified)
+export HF_TOKEN=...            # read-only; needs access to wangzhang/abliterix-datasets
 mkdir -p logs
 
-# LLM judge for both stages and for evaluate.py. Asks for the LLM name, base URL and
-# API key (hidden), and writes them to the gitignored .env.judge. Load it in each new shell.
+# Set up the LLM judge (writes the gitignored .env.judge). Load it in every new shell.
 uv run python scripts/configure_judge.py
 set -a; . ./.env.judge; set +a
 JUDGE=(--detection.llm-judge-model "${LLM_JUDGE_MODEL:?}" --detection.llm-judge-base-url "${LLM_JUDGE_BASE_URL:?}")
 
-# 1. Data (prints row counts and overlap flags only)
+# 1. Data (prints only row counts and overlap checks)
 uv run python scripts/setup_data.py
 
-# 2. MXFP4 -> BF16 checkpoint with quantization_config stripped (needed by the vLLM in-place path)
+# 2. Convert the model to BF16 (required by the vLLM backend)
 uv run python scripts/upstream/prepare_bf16_checkpoint.py --model openai/gpt-oss-120b --out out/gpt-oss-120b-bf16
-uv run python scripts/check_configs.py --pod   # stage2's model dir is still missing: expected
+uv run python scripts/check_configs.py --pod   # Stage 2's model is still missing: expected
 
-# 3. Stage 1 search, then export of the best trial
+# 3. Stage 1 search, then export the best trial
 uv run abliterix --config configs/stage1.toml --non-interactive "${JUDGE[@]}" 2>&1 | tee logs/stage1.log
 TRIAL=$(uv run python scripts/best_trial.py --checkpoint-dir checkpoints/stage1 --model out/gpt-oss-120b-bf16)
 uv run python scripts/upstream/export_model.py --model out/gpt-oss-120b-bf16 \
   --checkpoint checkpoints/stage1 --trial "$TRIAL" --config configs/stage1.toml --save-local out/stage1 \
   2>&1 | tee logs/export_stage1.log
 
-# 4. Stage 2 search on the Stage 1 export, then the final export
-uv run python scripts/check_configs.py --pod   # must now pass with 0 errors
+# 4. Stage 2 search on the Stage 1 model, then the final export
+uv run python scripts/check_configs.py --pod   # must now report 0 errors
 uv run abliterix --config configs/stage2.toml --non-interactive "${JUDGE[@]}" 2>&1 | tee logs/stage2.log
 TRIAL=$(uv run python scripts/best_trial.py --checkpoint-dir checkpoints/stage2 --model out/stage1)
 uv run python scripts/upstream/export_model.py --model out/stage1 \
   --checkpoint checkpoints/stage2 --trial "$TRIAL" --config configs/stage2.toml --save-local out/stage2 \
   2>&1 | tee logs/export_stage2.log
 
-# 5. Optional Heretic cross-check (first, so evaluate.py can include it in its report)
+# 5. Optional Heretic check (run before step 6 so the report includes it)
 uv tool install heretic-llm==1.4.0
 uv run python scripts/heretic_crosscheck.py --base openai/gpt-oss-120b --modified out/stage2 --dry-run
 uv run python scripts/heretic_crosscheck.py --base openai/gpt-oss-120b --modified out/stage2
 
-# 6. Held-out evaluation, with the unmodified BF16 base on the same prompts
+# 6. Evaluate, with the unmodified BF16 model as a baseline on the same prompts
 uv run python scripts/evaluate.py --model out/stage2 --baseline out/gpt-oss-120b-bf16 --tensor-parallel-size 4
 ```
 
-**Local only, no upload.** The final model is `out/stage2/` (gitignored). Nothing above
-uploads to the Hugging Face Hub: `export_model.py` uploads only when given `--push-to`,
-which is never passed, and `abliterix --non-interactive` returns before the interactive
-menu that holds abliterix's upload option. As a backstop, use a fine-grained HF token with
-read access only, so an upload would be refused even if one were attempted.
+The final model is in `out/stage2/`. **Nothing is uploaded.** `export_model.py` uploads
+only with `--push-to`, which is never passed, and `abliterix --non-interactive` exits
+before its upload menu. As a safeguard, use a read-only HF token.
 
-The brief's form `abliterix --config configs/stageN.toml --non-interactive
---non-interactive-output-dir out/stageN` uses real flags. The output-dir export is
-dropped for the reason above. The configs already set `non_interactive = true`.
-Always write `--config <path>` with a space: 1.12.2 silently ignores `--config=<path>`.
+Notes:
 
-**Check the logs, not only exit codes.** abliterix 1.12.2 exits 0 on config-validation
-errors and when a checkpoint is already finished.
+- Write `--config <path>` with a space. abliterix 1.12.2 silently ignores `--config=<path>`.
+- **Check the logs, not just exit codes.** abliterix 1.12.2 exits 0 on config errors and
+  when a stage has already finished.
 
 ## Resuming
 
-- **Interrupted search:** re-run the same `abliterix --config ...` command. In
-  non-interactive mode abliterix continues the journal at
-  `checkpoints/stageN/<slug(model_id)>.jsonl`. Settings stored in the journal override
-  the TOML and the CLI flags, so editing the config does not affect a resumed study.
-  That includes the judge model and base URL: a resumed stage keeps its original judge.
-  The API key is not stored, so load `.env.judge` again.
-- **Restart a stage from scratch:** add `--overwrite-checkpoint`, or delete that journal.
-  A finished study is otherwise refused (exit code 0, see above).
-- **Export:** `export_model.py` does not check the target directory. Delete a partial
-  `out/stageN` before retrying.
-- Stage 2 depends on the exact Stage 1 export. If you re-export Stage 1, restart Stage 2.
+- **Interrupted search:** run the same `abliterix` command again. It continues from
+  `checkpoints/stageN/<model>.jsonl`. Settings saved there take priority over the config
+  and command line, including the judge model and URL. The API key is not saved, so
+  load `.env.judge` again.
+- **Start a stage over:** add `--overwrite-checkpoint` or delete the journal file.
+  Otherwise a finished stage is skipped (with exit code 0).
+- **Failed export:** delete the partial `out/stageN` before retrying.
+- If you re-export Stage 1, run Stage 2 again from scratch.
 
 ## Evaluation (`scripts/evaluate.py`)
 
-- **Prompts:** `harmful_1000` rows that do not occur in `harmful_500`, compared after
-  case-folding and whitespace normalization. Directions come from `harmful_500`
-  `train[:400]` and trial selection from `train[400:]`, so none of these prompts was
-  seen. If the data is missing or no row is left, the script stops with a loud error
-  (exit 2). Recon could not check the overlap (see Unverified).
-- **Generation:** vLLM, greedy, `--max-new-tokens` ≥ 256 (default 256). gpt-oss's
-  analysis channel is pre-filled empty, as abliterix's HF path does, so the budget goes
-  to the visible answer. Each model runs in its own spawned process.
-- **Judge:** the same LLM the search used (`LLM_JUDGE_*` from `.env.judge`), with
-  abliterix's judge prompt and JSON schema, batch size 1, temperature 0. A test checks
-  that the request body is identical to the one abliterix 1.12.2 sends.
-- **Degenerate filter:** empty output, repeated n-grams, symbol runs or single-character
-  floods count as refusals and are not sent to the judge.
-- **Output:** refusals out of N with a Wilson 95% interval, in `runs/eval/results.json`
-  and `runs/eval/summary.md`. Per-prompt records with responses go to
-  `runs/eval/*_records.jsonl`; `runs/` is gitignored. Prompt text is never printed.
-- `--baseline` runs the identical prompts on the unmodified model. Use the local BF16
-  base for a like-for-like comparison.
-- If `runs/heretic_crosscheck/summary.json` exists, it is added to the report as a
-  separate section.
+- **Prompts:** rows of `harmful_1000` that are not in `harmful_500` (ignoring case and
+  whitespace). The search only used `harmful_500`, so these are unseen. If the data is
+  missing or no rows are left, the script stops with exit code 2.
+- **Generation:** vLLM, greedy, at least 256 new tokens (default 256). gpt-oss's
+  reasoning step is skipped so all tokens go to the visible answer. Each model runs in
+  its own process.
+- **Judge:** the same LLM as the search, with abliterix's judge prompt, one response per
+  request, temperature 0. A test checks that the request matches abliterix's exactly.
+- **Broken output** (empty, repeating, or mostly symbols) counts as a refusal and is not
+  sent to the judge.
+- **Results:** refusal count with a 95% confidence interval in `runs/eval/results.json`
+  and `runs/eval/summary.md`. Per-prompt responses are in `runs/eval/*_records.jsonl`.
+  Prompt text is never printed.
+- `--baseline` runs the same prompts on the unmodified model. Use the local BF16 model
+  for a fair comparison.
+- If `runs/heretic_crosscheck/summary.json` exists, it is added as a separate section.
 
-## Optional Heretic cross-check (`scripts/heretic_crosscheck.py`)
+## Heretic check (`scripts/heretic_crosscheck.py`, optional)
 
-Runs `heretic --model <base> --evaluate-model <modified>` (Heretic 1.4.0) as a
-subprocess and writes `runs/heretic_crosscheck/heretic.log` and `summary.json`. The
-summary records version, command, models, KL, refusals, prompt total, detector and
-datasets. Heretic is never imported, and it is not in `uv.lock`. Install it separately
-(`uv tool install heretic-llm==1.4.0`) or pass `--heretic-bin`. If it is missing, the
-script prints `SKIPPED` and exits 0. `--dry-run` prints the exact command without
-needing Heretic or a GPU.
+Runs `heretic --model <base> --evaluate-model <modified>` (Heretic 1.4.0) and saves
+`runs/heretic_crosscheck/heretic.log` and `summary.json`. Heretic is a separate install
+(`uv tool install heretic-llm==1.4.0` or `--heretic-bin`); if it is missing the script
+prints `SKIPPED` and exits 0. `--dry-run` prints the command without needing Heretic or
+a GPU.
 
-**This is a different yardstick from `evaluate.py`.** Heretic uses its default
-datasets (`mlabonne/harmful_behaviors` and `mlabonne/harmless_alpaca`, `test[:100]`),
-a substring refusal detector, 100-token generations, and first-token KL on harmless
-prompts. `evaluate.py` uses held-out abliterix prompts, an LLM judge and ≥256 tokens.
-Report the two numbers side by side. Never merge them or call them the same metric.
-Agreement between them is a sanity check, not proof.
+**Heretic measures something different.** It uses its own prompts
+(`mlabonne/harmful_behaviors`, `mlabonne/harmless_alpaca`, 100 each), detects refusals
+by keyword, generates only 100 tokens, and reports KL divergence on harmless prompts.
+Report its numbers next to `evaluate.py`'s, never combined. Agreement is a sanity
+check, not proof.
 
-- **Sequencing and memory:** run it after both stages and exports finish, on the same
-  pod, with nothing else on the GPUs. It loads both 120B models one after the other: it
-  computes the base logprobs, frees the base, then loads the modified BF16 model
-  (~234 GB) with `device_map="auto"`. Peak is about one model plus activations.
-- **PyTorch:** Heretic's README requires ≥ 2.6 to load MXFP4 gpt-oss (`torch.accelerator`).
-  Its own install resolves a newer torch (2.15.0 at recon).
-- The log is parsed only if it comes from Heretic 1.4.0, the version whose output format
-  was read from source. Any other version, or a missing line, raises an error and
-  leaves the raw log.
-- `--base openai/gpt-oss-120b` compares against the MXFP4 original. Pass
-  `--base out/gpt-oss-120b-bf16` to compare against the same BF16 weights abliterix started from.
+- Run it last, with nothing else on the GPUs. It loads the base model, then the
+  modified one (~234 GB), one at a time.
+- It needs PyTorch 2.6 or newer; its own install brings a recent version.
+- Only Heretic 1.4.0 output is parsed. Other versions stop with an error and keep the log.
+- `--base openai/gpt-oss-120b` compares against the original download. Use
+  `--base out/gpt-oss-120b-bf16` to compare against the exact weights abliterix started from.
 
-## Licensing
+## License
 
-This repo is AGPL-3.0 ([LICENSE](LICENSE)) because it includes AGPL-3.0 abliterix files.
-Attribution is in [NOTICE](NOTICE). gpt-oss-120b is Apache-2.0, and derived checkpoints
-must keep its terms. The licence of `wangzhang/abliterix-datasets` is unknown. Heretic
-(AGPL-3.0) is only invoked as an external tool.
+AGPL-3.0 ([LICENSE](LICENSE)), because it includes abliterix files. Attribution is in
+[NOTICE](NOTICE). gpt-oss-120b is Apache-2.0, and models derived from it must keep
+those terms. The license of `wangzhang/abliterix-datasets` is unknown. Heretic
+(AGPL-3.0) is only run as an external program.
 
-## Unverified assumptions (TODO(verify))
+## Unverified assumptions
 
-1. **Dataset access and layout.** `wangzhang/abliterix-datasets` returned HTTP 401
-   without a token. `setup_data.py` assumes `<subset>/*.json` (one file per subset:
-   `good_500`, `harmful_500`, `good_1000`, `harmful_1000`). It verifies the two upstream
-   SHA256 pins for the 500 sets and fails loudly on any other layout.
-2. **Held-out feasibility.** Whether `harmful_1000` contains rows outside `harmful_500`,
-   and whether either 1000 set is a superset of its 500 set, is unknown.
-   `setup_data.py` prints the flags, and `evaluate.py` stops if nothing is held out.
-   Near-duplicates such as paraphrases or translations are not detected.
-3. **Export path.** `--non-interactive-output-dir` is expected to fail with the vLLM
-   in-place backend (static reading of `cli.py` and `engine.export_merged`).
-   `scripts/upstream/export_model.py` is assumed to work with 1.12.2 because all APIs
-   it calls exist, but it has not been run.
-4. **Export fidelity.** The HF export applies router suppression by editing gate weight
-   rows. The vLLM search applied router bias live. Whether `out/stageN` reproduces the
-   scored trial's refusals and KL is unverified, so `evaluate.py` measures the exported
-   weights.
-5. **Analysis channel during search.** abliterix's vLLM generator does not visibly apply
-   the gpt-oss CoT-skip prefix that its HF path uses. Trial-time refusal counts may be
-   computed on text that includes the analysis channel. `evaluate.py` always skips it.
-6. **vLLM prompt handling in `evaluate.py`.** The prompt is the chat-template string plus
-   Harmony special tokens as text. vLLM is assumed to tokenize these as special tokens.
-7. **`weight_normalization = "pre"`** is assumed to be an acceptable stand-in for upstream's
-   `"full"`. Its effect on refusals and KL for this model is unmeasured.
-8. **Heretic on the pod:** local-directory arguments, no interactive prompt in evaluate
-   mode (stdin is closed so it fails rather than hangs), and whether the MXFP4 base
-   stays quantized or is dequantized in memory.
-9. **Judge endpoint:** the user-supplied LLM must serve an OpenAI-compatible
-   `/chat/completions` that accepts temperature 0 and a JSON-schema `response_format`
-   (abliterix's defaults for these). Not tested against a live endpoint. Use a model
-   pinned by version, so it does not change between Stage 1, Stage 2 and evaluation.
-   `evaluate.py` reuses abliterix's private `_JUDGE_PROMPT` and `_JUDGE_RESPONSE_FORMAT`,
-   which are pinned only by the abliterix version.
+1. **Dataset access.** `wangzhang/abliterix-datasets` returned HTTP 401 without a token.
+   `setup_data.py` expects one JSON file per folder (`good_500`, `harmful_500`,
+   `good_1000`, `harmful_1000`), checks the known checksums of the two 500-row files,
+   and fails on anything else.
+2. **Unseen prompts.** It is unknown whether `harmful_1000` has rows not in
+   `harmful_500`. `setup_data.py` prints the overlap and `evaluate.py` stops if nothing
+   is left. Paraphrases are not detected.
+3. **Export.** abliterix's built-in export is expected to fail with vLLM (from reading
+   the code). Upstream's `export_model.py` should work with 1.12.2 but has not been run.
+4. **Export accuracy.** The export bakes the router change into the weights, while the
+   search applied it on the fly. The exported model may score differently from the
+   trial, so `evaluate.py` measures the exported model.
+5. **Reasoning during search.** abliterix's vLLM path may not skip gpt-oss's reasoning
+   step, so search-time refusal counts may include it. `evaluate.py` always skips it.
+6. **vLLM prompts.** `evaluate.py` passes gpt-oss's special tokens as text and assumes
+   vLLM recognizes them.
+7. **`weight_normalization = "pre"`** is assumed to be a fair substitute for `"full"`.
+   Its effect is unmeasured.
+8. **Heretic on the GPU machine:** local model paths, no interactive questions (input is
+   closed so it fails instead of hanging), and whether the original model stays
+   compressed in memory.
+9. **Judge endpoint:** must be OpenAI-compatible (`/chat/completions`) and accept
+   temperature 0 and a JSON-schema `response_format`. Not tested against a live
+   endpoint. Use a fixed model version so it doesn't change between stages and
+   evaluation. `evaluate.py` reuses abliterix's internal judge prompt, which is only
+   fixed by the pinned abliterix version.
 
 ## Known risks
 
-- abliterix 1.12.2 exit codes are unreliable (see above). Master fixes this but was not
-  pinned, because 1.12.2 already supports every key the configs use.
-- 100 / 40 trials in Stage 1 is half of upstream's v7s1 budget. Stage 2 keeps 20 warm-up
-  trials for ~9 dimensions, which is thin for TPE.
-- Stage 2 KL is measured against Stage 1, not the original. Total drift is only
-  approximately additive (upstream comment).
-- The two Heretic and `evaluate.py` numbers measure different things. Do not average them.
+- abliterix 1.12.2 exit codes are unreliable (see above).
+- Stage 1 runs 100 trials with 40 warm-up trials, half of upstream's budget. Stage 2
+  has only 20 warm-up trials for about 9 search dimensions, which is thin.
+- Stage 2's KL is measured against the Stage 1 model, not the original. The total is
+  only roughly the sum of both stages.
+- Heretic and `evaluate.py` measure different things. Do not average them.

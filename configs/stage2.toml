@@ -1,8 +1,5 @@
-# Run-specific copy of upstream configs/gpt_oss_120b_v7s2.toml
-# Source: https://github.com/wuwangzhang1216/abliterix/blob/1940c8c14688772011d5f20b03c5dffb042a3e8f/configs/gpt_oss_120b_v7s2.toml
-# Upstream SHA: 1940c8c14688772011d5f20b03c5dffb042a3e8f
-# Every change versus upstream is marked "DEVIATION" and listed in docs/DEVIATIONS.md.
-# Hardware: 4x 96 GB GPUs, TP=4.
+# Copy of https://github.com/wuwangzhang1216/abliterix/blob/1940c8c14688772011d5f20b03c5dffb042a3e8f/configs/gpt_oss_120b_v7s2.toml
+# Changes are marked DEVIATION and listed in docs/DEVIATIONS.md.
 
 non_interactive = true
 
@@ -43,8 +40,7 @@ non_interactive = true
 [model]
 # POINT AT STAGE 1 EXPORT — this path is the Stage 1 winner's abliterated
 # BF16 checkpoint, created by the orchestration script between stages.
-# DEVIATION: Stage 1 export directory of this repo (upstream:
-# "/workspace/gpt-oss-120b-v7s1"). Relative to the repo root.
+# DEVIATION: was "/workspace/gpt-oss-120b-v7s1".
 model_id = "out/stage1"
 dtype_fallback_order = ["bfloat16"]
 quant_method = "none"
@@ -69,9 +65,7 @@ vector_method = "mean"
 steering_mode = "direct"
 decay_kernel = "linear"
 orthogonal_projection = true
-# DEVIATION: upstream sets "full", which abliterix 1.12.2 rejects at config load
-# for backend = "vllm" (ProjectionCache is rank-1 only). "pre" is the value the
-# abliterix validator itself substitutes when the key is left unset under vLLM.
+# DEVIATION: was "full", which abliterix rejects with backend = "vllm".
 weight_normalization = "pre"
 
 # Stage 2 operates on the RESIDUAL refusal direction after Stage 1's
@@ -106,9 +100,9 @@ disabled_components = ["attn.q_proj", "attn.k_proj", "attn.v_proj"]
 #      similar to v5's regime
 num_trials = 50
 num_warmup_trials = 20
-# DEVIATION: added (not in upstream file) for a reproducible TPE sampler.
+# DEVIATION: added for reproducibility.
 sampler_seed = 42
-# DEVIATION: upstream "checkpoints_gpt_oss_120b_v7s2".
+# DEVIATION: was "checkpoints_gpt_oss_120b_v7s2".
 checkpoint_dir = "checkpoints/stage2"
 
 [experts]
@@ -132,8 +126,7 @@ prune_threshold = 5.0
 
 [detection]
 llm_judge = true
-# DEVIATION (run time): the judge model and endpoint come from scripts/configure_judge.py
-# and are passed as --detection.llm-judge-model / --detection.llm-judge-base-url (README).
+# DEVIATION: overridden on the command line (see README).
 llm_judge_model = "google/gemini-3.1-flash-lite-preview"
 llm_judge_batch_size = 1
 llm_judge_concurrency = 16
@@ -143,8 +136,7 @@ print_responses = false
 print_residual_geometry = false
 plot_residuals = false
 
-# DEVIATION (all four sections): dataset paths moved from "datasets/" to the
-# gitignored "data/" directory written by scripts/setup_data.py.
+# DEVIATION (all four sections): was "datasets/...".
 [benign_prompts]
 dataset = "data/good_500"
 split = "train[:400]"

@@ -1,8 +1,5 @@
-# Run-specific copy of upstream configs/gpt_oss_120b_v7s1.toml
-# Source: https://github.com/wuwangzhang1216/abliterix/blob/1940c8c14688772011d5f20b03c5dffb042a3e8f/configs/gpt_oss_120b_v7s1.toml
-# Upstream SHA: 1940c8c14688772011d5f20b03c5dffb042a3e8f
-# Every change versus upstream is marked "DEVIATION" and listed in docs/DEVIATIONS.md.
-# Hardware: 4x 96 GB GPUs, TP=4.
+# Copy of https://github.com/wuwangzhang1216/abliterix/blob/1940c8c14688772011d5f20b03c5dffb042a3e8f/configs/gpt_oss_120b_v7s1.toml
+# Changes are marked DEVIATION and listed in docs/DEVIATIONS.md.
 
 non_interactive = true
 
@@ -45,8 +42,7 @@ non_interactive = true
 # Expected wall time: 200 trials × ~60s = ~3.3 hr on 4× RTX PRO 6000 TP=4.
 
 [model]
-# DEVIATION: local BF16 checkpoint produced by scripts/upstream/prepare_bf16_checkpoint.py
-# (upstream: "/workspace/gpt-oss-120b-bf16"). Relative to the repo root.
+# DEVIATION: was "/workspace/gpt-oss-120b-bf16".
 model_id = "out/gpt-oss-120b-bf16"
 dtype_fallback_order = ["bfloat16"]
 quant_method = "none"
@@ -71,9 +67,7 @@ vector_method = "mean"
 steering_mode = "direct"
 decay_kernel = "linear"
 orthogonal_projection = true
-# DEVIATION: upstream sets "full", which abliterix 1.12.2 rejects at config load
-# for backend = "vllm" (ProjectionCache is rank-1 only). "pre" is the value the
-# abliterix validator itself substitutes when the key is left unset under vLLM.
+# DEVIATION: was "full", which abliterix rejects with backend = "vllm".
 weight_normalization = "pre"
 
 # Back to v5's temperate attention band — v6 [1, 7] was over-correction.
@@ -98,13 +92,12 @@ disabled_components = ["attn.q_proj", "attn.k_proj", "attn.v_proj"]
 "mlp.down_proj" = 0.25
 
 [optimization]
-# DEVIATION: limited trial budget (upstream 200 / 80). 40 warmup / 9 dims = 4.4
-# samples per dim, i.e. v5's regime rather than v7s1's 8.9.
+# DEVIATION: was 200 / 80.
 num_trials = 100
 num_warmup_trials = 40
-# DEVIATION: added (not in upstream file) for a reproducible TPE sampler.
+# DEVIATION: added for reproducibility.
 sampler_seed = 42
-# DEVIATION: upstream "checkpoints_gpt_oss_120b_v7s1".
+# DEVIATION: was "checkpoints_gpt_oss_120b_v7s1".
 checkpoint_dir = "checkpoints/stage1"
 
 # Router suppression — v5 range.  v6 tried [-10, 0] + max_suppress=12 but
@@ -124,8 +117,7 @@ prune_threshold = 5.0
 
 [detection]
 llm_judge = true
-# DEVIATION (run time): the judge model and endpoint come from scripts/configure_judge.py
-# and are passed as --detection.llm-judge-model / --detection.llm-judge-base-url (README).
+# DEVIATION: overridden on the command line (see README).
 llm_judge_model = "google/gemini-3.1-flash-lite-preview"
 llm_judge_batch_size = 1
 llm_judge_concurrency = 16
@@ -135,8 +127,7 @@ print_responses = false
 print_residual_geometry = false
 plot_residuals = false
 
-# DEVIATION (all four sections): dataset paths moved from "datasets/" to the
-# gitignored "data/" directory written by scripts/setup_data.py.
+# DEVIATION (all four sections): was "datasets/...".
 [benign_prompts]
 dataset = "data/good_500"
 split = "train[:400]"

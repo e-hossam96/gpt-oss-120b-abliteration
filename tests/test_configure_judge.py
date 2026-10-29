@@ -52,7 +52,6 @@ def test_env_file_round_trips_through_shell_quoting(tmp_path):
 
 
 def test_judge_request_matches_abliterix(tmp_path, monkeypatch):
-    """Our request body equals abliterix 1.12.2's own for the same judge and item."""
     from abliterix.eval import detector
 
     sent = []

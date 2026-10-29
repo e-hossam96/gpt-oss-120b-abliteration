@@ -1,10 +1,4 @@
-"""Optional cross-check with Heretic's evaluation mode (subprocess only, never imported).
-
-Runs `heretic --model <base> --evaluate-model <modified>` from an isolated install and
-records KL divergence and refusal counts. This is a different yardstick from
-scripts/evaluate.py (different prompts, substring refusal detector, 100-token
-generations by default); report both side by side and never merge them.
-"""
+"""Optional cross-check: run Heretic's evaluate mode and record its KL and refusal counts."""
 
 from __future__ import annotations
 
@@ -20,8 +14,7 @@ from pathlib import Path
 
 from layout import RUNS_DIR
 
-# The output format below was read from the heretic-llm 1.4.0 source (main.py,
-# evaluator.py). Other versions are refused rather than parsed on trust.
+# The log format was checked against 1.4.0 only.
 VERIFIED_HERETIC_VERSION = "1.4.0"
 DETECTOR = "substring refusal_markers (Heretic config.default.toml); empty response = refusal"
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
@@ -36,7 +29,7 @@ PATTERNS = {
 
 
 class HereticOutputError(RuntimeError):
-    """Raised when the Heretic log does not match the verified format."""
+    pass
 
 
 def build_command(heretic_bin: str, base: str, modified: str) -> list[str]:
@@ -44,7 +37,7 @@ def build_command(heretic_bin: str, base: str, modified: str) -> list[str]:
 
 
 def resolve_model_arg(value: str) -> str:
-    """Absolute path for local directories (Heretic runs in the output dir), else a Hub id."""
+    # Heretic runs inside the output directory, so local paths must be absolute.
     path = Path(value)
     return str(path.resolve()) if path.exists() else value
 
@@ -85,14 +78,12 @@ def run_heretic(cmd: list[str], out_dir: Path, log_path: Path) -> int:
     env = dict(
         os.environ, NO_COLOR="1", COLUMNS="1000", PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8"
     )
-    # TODO(verify): evaluate mode asks no interactive questions; stdin is closed so a
-    # prompt would fail instead of hanging.
     with log_path.open("w", encoding="utf-8") as log:
         proc = subprocess.Popen(
             cmd,
-            cwd=out_dir,  # keeps any stray config.toml in the repo root from being picked up
+            cwd=out_dir,  # Heretic reads config.toml from its working directory
             env=env,
-            stdin=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,  # fail instead of hanging on an interactive question
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,

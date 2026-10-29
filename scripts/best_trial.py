@@ -1,9 +1,4 @@
-"""Print the trial number to export from an abliterix Optuna journal.
-
-Selection rule is abliterix 1.12.2's own non-interactive export rule (cli.py): among
-COMPLETE trials, minimize (refusals, kl_divergence). The printed number is the trial's
-`index` user attribute, which upstream scripts/export_model.py --trial matches first.
-"""
+"""Print the best trial to export: fewest refusals, then lowest KL (abliterix's own rule)."""
 
 from __future__ import annotations
 
@@ -23,7 +18,7 @@ def journal_path(checkpoint_dir: Path, model_id: str) -> Path:
 
 
 def open_journal(path: Path) -> JournalStorage:
-    # Open-file lock, as abliterix uses; Optuna's default symlink lock fails on Windows.
+    # Optuna's default lock fails on Windows.
     lock = JournalFileOpenLock(str(path))
     return JournalStorage(JournalFileBackend(str(path), lock_obj=lock))
 

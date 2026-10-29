@@ -104,7 +104,7 @@ def test_abliterix_schema_catches_silently_ignored_key(configs, upstreams):
     cfg = copy.deepcopy(configs["stage1"])
     upstream = copy.deepcopy(upstreams["stage1"])
     cfg["steering"]["not_a_field"] = 1
-    upstream["steering"]["not_a_field"] = 1  # isolate the schema check from the subset check
+    upstream["steering"]["not_a_field"] = 1  # so only the schema check can catch it
     report = check_stage("stage1", cfg, upstream)
     assert any("not an abliterix config field" in e for e in report.errors)
 

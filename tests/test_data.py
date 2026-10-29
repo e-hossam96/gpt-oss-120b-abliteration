@@ -56,7 +56,6 @@ def test_overlap_flags(tmp_path, synthetic_data):
 
 
 def test_materialized_layout_loads_through_abliterix(tmp_path, monkeypatch):
-    """The config's `train[400:]` slice works on a directory holding one JSON file."""
     import datasets.config
     from abliterix.data import load_prompt_dataset
     from abliterix.types import PromptSource
