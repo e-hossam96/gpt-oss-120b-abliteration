@@ -1,0 +1,2 @@
+# LF everywhere so upstream copies stay byte-identical to the SHA256s in docs/UPSTREAM.md.
+* text=auto eol=lf

@@ -1,0 +1,46 @@
+gpt-oss-120b-abliteration
+Copyright (C) 2026 e-hossam96
+
+This repository is licensed under the GNU Affero General Public License v3.0
+(AGPL-3.0-only), because it contains copies of AGPL-3.0 files from abliterix.
+
+Third-party material
+====================
+
+abliterix — https://github.com/wuwangzhang1216/abliterix
+  Copyright (C) 2026 Wangzhang Wu. Licensed under AGPL-3.0-or-later.
+  abliterix is itself a derivative work of Heretic (Copyright (C) 2025 Philipp
+  Emanuel Weidmann).
+  Copied unchanged at commit 1940c8c14688772011d5f20b03c5dffb042a3e8f:
+    configs/upstream/default.toml
+    configs/upstream/gpt_oss_120b_v7s1.toml
+    configs/upstream/gpt_oss_120b_v7s2.toml
+    scripts/upstream/prepare_bf16_checkpoint.py
+    scripts/upstream/export_model.py
+  Modified copies (changes listed in docs/DEVIATIONS.md):
+    configs/stage1.toml  (from configs/gpt_oss_120b_v7s1.toml)
+    configs/stage2.toml  (from configs/gpt_oss_120b_v7s2.toml)
+  scripts/evaluate.py reads the judge prompt text and response schema from the
+  installed abliterix package at runtime (not copied).
+  The abliterix Python package (1.12.2) is a runtime dependency installed from PyPI.
+
+Heretic — https://github.com/p-e-w/heretic
+  Copyright (C) 2025-2026 Philipp Emanuel Weidmann and contributors.
+  Licensed under AGPL-3.0-or-later.
+  Used only as an optional, separately installed command-line tool by
+  scripts/heretic_crosscheck.py (via subprocess). No Heretic code is copied into or
+  imported by this repository, and it is not part of uv.lock.
+
+gpt-oss-120b — https://huggingface.co/openai/gpt-oss-120b
+  Copyright OpenAI. Licensed under the Apache License 2.0 (Hub metadata,
+  commit b5c939de8f754692c1647ca79fbf85e8c1e70f8a). Weights are downloaded at
+  runtime and are never stored in this repository. Derived checkpoints must carry the
+  Apache-2.0 license and NOTICE terms of the original model.
+
+Datasets
+  wangzhang/abliterix-datasets (Hugging Face): license UNKNOWN. The repository
+  metadata was not accessible during recon (HTTP 401). Downloaded at runtime into
+  the gitignored data/ directory, never committed. Check its license before use.
+  mlabonne/harmless_alpaca and mlabonne/harmful_behaviors (used only by Heretic's
+  default evaluation, downloaded by Heretic itself): no license is declared in their
+  Hub metadata.

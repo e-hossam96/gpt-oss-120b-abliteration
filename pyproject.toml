@@ -1,17 +1,41 @@
 [project]
 name = "gpt-oss-120b-abliteration"
 version = "0.1.0"
-description = "GPT OSS 120b Abliteration"
+description = "Limited-trial two-stage abliteration of openai/gpt-oss-120b using the abliterix CLI"
 readme = "README.md"
 authors = [
     { name = "e-hossam96", email = "ehh.hossam@gmail.com" }
 ]
+license = "AGPL-3.0-only"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "abliterix==1.12.2",
+]
 
-[project.scripts]
-gpt-oss-120b-abliteration = "gpt_oss_120b_abliteration:main"
+[project.optional-dependencies]
+# GPU pod only (Linux): the configs use backend = "vllm".
+pod = [
+    "abliterix[vllm]==1.12.2",
+]
 
-[build-system]
-requires = ["uv_build>=0.13.6,<0.14.0"]
-build-backend = "uv_build"
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Byte-identical upstream copies; see docs/UPSTREAM.md.
+extend-exclude = ["scripts/upstream"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+pythonpath = ["scripts"]
+testpaths = ["tests"]

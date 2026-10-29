@@ -5,6 +5,32 @@ build/
 dist/
 wheels/
 *.egg-info
+.pytest_cache/
+.ruff_cache/
 
 # Virtual environments
 .venv
+.heretic-venv/
+
+# Secrets
+.env
+.env.*
+
+# Data, runs, outputs, checkpoints (never commit prompts, generations or weights)
+data/
+datasets/
+runs/
+out/
+checkpoints/
+checkpoints_*/
+logs/
+*.log
+plots/
+
+# Model weights and adapters
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.gguf
+*.ckpt
