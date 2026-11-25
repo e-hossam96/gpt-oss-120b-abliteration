@@ -12,7 +12,7 @@ import time
 import urllib.request
 from collections import Counter
 from collections.abc import Callable
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from multiprocessing import get_context
 from pathlib import Path
 from typing import Protocol
@@ -32,6 +32,7 @@ GPT_OSS_COT_SKIP = (
 JUDGE_RESPONSE_CHARS = 2000
 # Same max_tokens abliterix 1.12.2 sends for a single item.
 JUDGE_MAX_TOKENS = 5 + 50 + 256 + 32
+DEFAULT_JUDGE_WORKERS = 8
 
 Generate = Callable[[str, list[str], int], list[str]]
 
@@ -164,25 +165,31 @@ def evaluate_model(
     generate: Generate,
     judge: Judge,
     max_new_tokens: int,
+    judge_workers: int = DEFAULT_JUDGE_WORKERS,
 ) -> tuple[dict, list[dict]]:
     if max_new_tokens < MIN_NEW_TOKENS:
         raise ValueError(f"max_new_tokens must be >= {MIN_NEW_TOKENS}")
     responses = generate(model, prompts, max_new_tokens)
     if len(responses) != len(prompts):
         raise RuntimeError(f"{label}: got {len(responses)} responses for {len(prompts)} prompts")
-    records = []
-    for i, (prompt, response) in enumerate(zip(prompts, responses, strict=True)):
-        degenerate = is_degenerate(response)
-        judge_refusal = None if degenerate else judge.is_refusal(prompt, response)
-        records.append(
-            {
-                "index": i,
-                "degenerate": degenerate,
-                "judge_refusal": judge_refusal,
-                "refusal": degenerate or bool(judge_refusal),
-                "response": response,
-            }
-        )
+
+    degenerate = [is_degenerate(r) for r in responses]
+    to_judge = [i for i, bad in enumerate(degenerate) if not bad]
+    # Judge calls are independent HTTP requests, so run them concurrently. map() keeps order.
+    with ThreadPoolExecutor(max_workers=max(1, judge_workers)) as pool:
+        verdicts = pool.map(lambda i: judge.is_refusal(prompts[i], responses[i]), to_judge)
+        judged = dict(zip(to_judge, verdicts, strict=True))
+
+    records = [
+        {
+            "index": i,
+            "degenerate": degenerate[i],
+            "judge_refusal": judged.get(i),
+            "refusal": degenerate[i] or bool(judged.get(i)),
+            "response": response,
+        }
+        for i, response in enumerate(responses)
+    ]
     n = len(records)
     refusals = sum(r["refusal"] for r in records)
     low, high = wilson_interval(refusals, n)
@@ -270,7 +277,7 @@ def run(args: argparse.Namespace, generate: Generate, judge: Judge) -> int:
     summaries = []
     for label, model in targets:
         summary, records = evaluate_model(
-            label, model, prompts, generate, judge, args.max_new_tokens
+            label, model, prompts, generate, judge, args.max_new_tokens, args.judge_workers
         )
         summaries.append(summary)
         with (args.out_dir / f"{label}_records.jsonl").open("w", encoding="utf-8") as f:
@@ -305,6 +312,12 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--tensor-parallel-size", type=int, default=4)
     parser.add_argument("--max-model-len", type=int, default=4096)
     parser.add_argument("--limit", type=int, help="evaluate only the first N held-out prompts")
+    parser.add_argument(
+        "--judge-workers",
+        type=int,
+        default=DEFAULT_JUDGE_WORKERS,
+        help="concurrent judge requests (lower it if the endpoint rate-limits)",
+    )
     parser.add_argument(
         "--heretic-summary", type=Path, default=RUNS_DIR / "heretic_crosscheck" / "summary.json"
     )

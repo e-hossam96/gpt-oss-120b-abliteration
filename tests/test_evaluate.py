@@ -1,5 +1,6 @@
 import io
 import json
+import time
 
 import pytest
 from conftest import write_subset
@@ -53,6 +54,24 @@ def test_evaluate_model_counts_and_degenerate_skip_judge():
     assert summary["judge_refusals"] == 1
     assert len(judge.calls) == 2  # the empty response never reaches the judge
     assert records[2]["judge_refusal"] is None
+
+
+def test_concurrent_judging_keeps_prompt_order():
+    class SlowFirstJudge(FakeJudge):
+        def is_refusal(self, question, response):
+            time.sleep(0.05 if question == "q0" else 0)  # q0 finishes last
+            return super().is_refusal(question, response)
+
+    prompts = [f"q{i}" for i in range(6)]
+    responses = [
+        f"I can't do {p}" if i % 2 else f"Answer for {p} here." for i, p in enumerate(prompts)
+    ]
+    summary, records = evaluate_model(
+        "x", "m", prompts, lambda m, p, n: responses, SlowFirstJudge(), 256, judge_workers=4
+    )
+    assert [r["judge_refusal"] for r in records] == [i % 2 == 1 for i in range(6)]
+    assert [r["response"] for r in records] == responses
+    assert summary["refusals"] == 3
 
 
 def test_evaluate_model_rejects_short_generation():

@@ -102,7 +102,9 @@ def check_trials(
         report.error(f"{stage}: optimization.sampler_seed must be 42")
 
 
-def check_key_subset(stage: str, cfg: dict[str, Any], upstream: dict[str, Any], report: Report):
+def check_key_subset(
+    stage: str, cfg: dict[str, Any], upstream: dict[str, Any], report: Report
+) -> None:
     added = set(flatten_keys(cfg)) - set(flatten_keys(upstream)) - ALLOWED_ADDED_KEYS
     for key in sorted(added):
         report.error(f"{stage}: key {key!r} does not exist in the upstream config")
@@ -118,7 +120,9 @@ def _model_class(annotation: Any) -> type[BaseModel] | None:
     return None
 
 
-def unknown_schema_keys(table: dict[str, Any], model: type[BaseModel], prefix: str = ""):
+def unknown_schema_keys(
+    table: dict[str, Any], model: type[BaseModel], prefix: str = ""
+) -> Iterator[str]:
     # abliterix silently ignores unknown keys inside sections, so find them here.
     for key, value in table.items():
         info = model.model_fields.get(key)

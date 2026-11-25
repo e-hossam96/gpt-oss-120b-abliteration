@@ -10,6 +10,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
       # Main dependencies only: the `pod` extra (vLLM) is never installed in CI.
       - run: uv sync --frozen
       - run: uv run ruff check
